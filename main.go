@@ -11,6 +11,9 @@ import (
 	"sync"
 )
 
+// version is set at build time via -ldflags
+var version = "dev"
+
 const (
 	waybackAPIBase = "https://web.archive.org/web"
 	startPort      = 1995
@@ -257,6 +260,8 @@ func startProxyServer(port int) error {
 }
 
 func main() {
+	log.Printf("Wayback Machine HTTP Proxy version %s", version)
+
 	var wg sync.WaitGroup
 
 	// Start a proxy server for each year/port from 1995 to 2005

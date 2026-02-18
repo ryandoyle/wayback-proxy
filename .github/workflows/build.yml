@@ -1,0 +1,83 @@
+name: Build
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: ['1.24.x']
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ matrix.go-version }}
+
+    - name: Verify dependencies
+      run: go mod verify
+
+    - name: Set version
+      id: version
+      run: |
+        COMMIT_COUNT=$(git rev-list --count HEAD)
+        VERSION="0.${COMMIT_COUNT}"
+        echo "version=${VERSION}" >> $GITHUB_OUTPUT
+        echo "Building version: ${VERSION}"
+
+    - name: Build
+      run: go build -v -ldflags="-X main.version=${{ steps.version.outputs.version }}" ./...
+
+  build-multiplatform:
+    name: Build Multi-Platform Binaries
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [linux, darwin, windows]
+        goarch: [amd64, arm64]
+        exclude:
+          - goos: windows
+            goarch: arm64
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24.x'
+
+    - name: Set version
+      id: version
+      run: |
+        COMMIT_COUNT=$(git rev-list --count HEAD)
+        VERSION="0.${COMMIT_COUNT}"
+        echo "version=${VERSION}" >> $GITHUB_OUTPUT
+        echo "Building version: ${VERSION}"
+
+    - name: Build binary
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+      run: |
+        VERSION="${{ steps.version.outputs.version }}"
+        OUTPUT_NAME=wayback-proxy-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}
+        if [ "${{ matrix.goos }}" = "windows" ]; then
+          OUTPUT_NAME="${OUTPUT_NAME}.exe"
+        fi
+        go build -v -ldflags="-X main.version=${VERSION}" -o "${OUTPUT_NAME}" .
+        ls -lh "${OUTPUT_NAME}"
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: wayback-proxy-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}
+        path: wayback-proxy-*
