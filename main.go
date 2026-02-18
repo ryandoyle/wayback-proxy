@@ -45,25 +45,35 @@ func cleanHTML(body []byte, year int, baseURL string) []byte {
 		return bytes.Join([][]byte{openTag, cleanedContent, closeTag}, []byte(""))
 	})
 
-	// Rewrite hyperlinks (href attributes) only
-	// Pattern: href="https://web.archive.org/web/{timestamp}/{original_url}"
-	// Replace with: href="{original_url}"
-	hrefRe := regexp.MustCompile(`(?i)href=["']https?://web\.archive\.org/web/\d+(?:id_)?/?(https?://[^"']+)["']`)
+	// For href attributes, simplify Wayback URLs
+	// If href="/web/{digits}/...", drop the "/web/{digits}/" and keep just the "..."
+	// Otherwise, leave it as is
+	hrefRe := regexp.MustCompile(`(?i)href=["']([^"']+)["']`)
 	body = hrefRe.ReplaceAllFunc(body, func(match []byte) []byte {
-		// Extract the original URL from the Wayback URL
-		parts := regexp.MustCompile(`(?i)href=["']https?://web\.archive\.org/web/\d+(?:id_)?/?(https?://[^"']+)["']`).FindSubmatch(match)
-		if len(parts) >= 2 {
-			originalURL := parts[1]
-			// Convert HTTPS to HTTP in the original URL
-			originalURL = bytes.ReplaceAll(originalURL, []byte("https://"), []byte("http://"))
-			log.Printf("[Year %d] Rewriting href: %s -> %s", year, string(match), fmt.Sprintf(`href="%s"`, originalURL))
-			return []byte(fmt.Sprintf(`href="%s"`, originalURL))
+		parts := hrefRe.FindSubmatch(match)
+		if len(parts) < 2 {
+			return match
 		}
+
+		hrefURL := string(parts[1])
+
+		// Check if this matches the pattern /web/{digits}/...
+		waybackPathRe := regexp.MustCompile(`^/web/\d+/(.+)$`)
+		if matches := waybackPathRe.FindStringSubmatch(hrefURL); len(matches) == 2 {
+			// Extract the URL after /web/{digits}/
+			cleanedURL := matches[1]
+			log.Printf("[Year %d] Rewriting href: %s -> %s", year, hrefURL, cleanedURL)
+			return []byte(fmt.Sprintf(`href="%s"`, cleanedURL))
+		}
+
+		// Otherwise, leave it as is
 		return match
 	})
 
-	// For src attributes (images, scripts, etc.), ensure they point to web.archive.org
-	// This handles: src="/path", src="path", src="http://example.com/path"
+	// For src attributes, simplify Wayback URLs
+	// If src="/web/{digits}{2 a-z chars}_/...", prepend "http://web.archive.org"
+	// The chars indicate assets. eg "im_" is for images, "js_", javascript. Serve
+	// these directly from wayback machine
 	srcRe := regexp.MustCompile(`(?i)src=["']([^"']+)["']`)
 	body = srcRe.ReplaceAllFunc(body, func(match []byte) []byte {
 		parts := srcRe.FindSubmatch(match)
@@ -73,40 +83,17 @@ func cleanHTML(body []byte, year int, baseURL string) []byte {
 
 		srcURL := string(parts[1])
 
-		// Skip if already a Wayback URL (full URL)
-		if strings.Contains(srcURL, "web.archive.org") {
-			// Just ensure it uses HTTP
-			srcURL = strings.Replace(srcURL, "https://web.archive.org", "http://web.archive.org", 1)
-			return []byte(fmt.Sprintf(`src="%s"`, srcURL))
+		// Check if this matches the pattern /web/{digits}{2 a-z chars}_/...
+		waybackWithFlagsRe := regexp.MustCompile(`^(/web/\d+[a-z]{2}_/.+)$`)
+		if matches := waybackWithFlagsRe.FindStringSubmatch(srcURL); len(matches) == 2 {
+			// Prepend http://web.archive.org
+			fullURL := "http://web.archive.org" + matches[1]
+			log.Printf("[Year %d] Rewriting src with flags: %s -> %s", year, srcURL, fullURL)
+			return []byte(fmt.Sprintf(`src="%s"`, fullURL))
 		}
 
-		// Skip data URLs, javascript:, etc.
-		if strings.HasPrefix(srcURL, "data:") || strings.HasPrefix(srcURL, "javascript:") || strings.HasPrefix(srcURL, "#") {
-			return match
-		}
-
-		// Check if this is a Wayback-internal path (starts with /web/)
-		// These are already Wayback URLs, just need to prepend the domain
-		if strings.HasPrefix(srcURL, "/web/") {
-			waybackURL := "http://web.archive.org" + srcURL
-			log.Printf("[Year %d] Rewriting Wayback-internal src: %s -> %s", year, srcURL, waybackURL)
-			return []byte(fmt.Sprintf(`src="%s"`, waybackURL))
-		}
-
-		// For relative URLs, just prepend http://web.archive.org
-		// Wayback Machine handles the rest of the routing
-		if !strings.HasPrefix(srcURL, "http://") && !strings.HasPrefix(srcURL, "https://") {
-			// Relative URL - just prepend web.archive.org
-			waybackURL := "http://web.archive.org" + srcURL
-			log.Printf("[Year %d] Rewriting relative src: %s -> %s", year, srcURL, waybackURL)
-			return []byte(fmt.Sprintf(`src="%s"`, waybackURL))
-		}
-
-		// For absolute URLs, create full Wayback URL with year
-		absoluteURL := strings.Replace(srcURL, "https://", "http://", 1)
-		waybackURL := fmt.Sprintf("http://web.archive.org/web/%d/%s", year, absoluteURL)
-		log.Printf("[Year %d] Rewriting absolute src: %s -> %s", year, srcURL, waybackURL)
-		return []byte(fmt.Sprintf(`src="%s"`, waybackURL))
+		// Otherwise, leave it as is
+		return match
 	})
 
 	return body

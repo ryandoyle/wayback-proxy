@@ -1,6 +1,10 @@
 # Wayback Machine HTTP Proxy
 
-A simple HTTP proxy that routes requests through the Wayback Machine, with each port corresponding to a specific year (1995-2005).
+A simple HTTP proxy that routes requests through the [Wayback Machine](https://web.archive.org/), with each port corresponding to a specific year (1995-2005).
+
+It's intented to be used for retro-computing demos etc...
+
+This is inspired by `theoldnet.com`'s [HTTP Proxy](https://theoldnet.com/docs/httpproxy/index.html) service.
 
 ## Quick Start
 
@@ -28,4 +32,4 @@ links to the direct `web.archive.org/...` links as the proxy needs to access the
 without going through itself.
 
 ## Quality
-This is all prompted, and I haven't really read the code. Don't use it for anything important.
+This is all prompted, and I haven't really read much of the the code. Don't use it for anything important.
