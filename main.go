@@ -85,6 +85,7 @@ func cleanHTML(body []byte, year int, baseURL string) []byte {
 
 	// For src attributes, simplify Wayback URLs
 	// If src="/web/{digits}{2 a-z chars}_/...", prepend "http://web.archive.org"
+	// If src contains "https://web.archive.org", rewrite to "http://web.archive.org"
 	// The chars indicate assets. eg "im_" is for images, "js_", javascript. Serve
 	// these directly from wayback machine
 	srcRe := regexp.MustCompile(`(?i)src=["']([^"']+)["']`)
@@ -95,6 +96,13 @@ func cleanHTML(body []byte, year int, baseURL string) []byte {
 		}
 
 		srcURL := string(parts[1])
+
+		// Check if this contains https://web.archive.org and rewrite to http
+		if strings.HasPrefix(srcURL, "https://web.archive.org") {
+			rewrittenURL := "http://web.archive.org" + srcURL[len("https://web.archive.org"):]
+			log.Printf("[Year %d] Rewriting src https to http: %s -> %s", year, srcURL, rewrittenURL)
+			return []byte(fmt.Sprintf(`src="%s"`, rewrittenURL))
+		}
 
 		// Check if this matches the pattern /web/{digits}{2 a-z chars}_/...
 		waybackWithFlagsRe := regexp.MustCompile(`^(/web/\d+[a-z]{2}_/.+)$`)
