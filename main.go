@@ -50,6 +50,7 @@ func cleanHTML(body []byte, year int, baseURL string) []byte {
 
 	// For href attributes, simplify Wayback URLs
 	// If href="/web/{digits}/...", drop the "/web/{digits}/" and keep just the "..."
+	// If href="http(s)://web.archive.org/web/{digits}/...", drop the prefix and keep just the "..."
 	// Otherwise, leave it as is
 	hrefRe := regexp.MustCompile(`(?i)href=["']([^"']+)["']`)
 	body = hrefRe.ReplaceAllFunc(body, func(match []byte) []byte {
@@ -66,6 +67,15 @@ func cleanHTML(body []byte, year int, baseURL string) []byte {
 			// Extract the URL after /web/{digits}/
 			cleanedURL := matches[1]
 			log.Printf("[Year %d] Rewriting href: %s -> %s", year, hrefURL, cleanedURL)
+			return []byte(fmt.Sprintf(`href="%s"`, cleanedURL))
+		}
+
+		// Check if this matches the pattern http(s)://web.archive.org/web/{digits}/...
+		waybackFullRe := regexp.MustCompile(`^https?://web\.archive\.org/web/\d+/(.+)$`)
+		if matches := waybackFullRe.FindStringSubmatch(hrefURL); len(matches) == 2 {
+			// Extract the URL after the wayback prefix
+			cleanedURL := matches[1]
+			log.Printf("[Year %d] Rewriting href (full URL): %s -> %s", year, hrefURL, cleanedURL)
 			return []byte(fmt.Sprintf(`href="%s"`, cleanedURL))
 		}
 
