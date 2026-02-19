@@ -31,5 +31,34 @@ Add `web.archive.org` to your proxy exception list to prevent infinite loops. Th
 links to the direct `web.archive.org/...` links as the proxy needs to access the Wayback Machine directly 
 without going through itself.
 
+## Testing
+
+Run the unit tests:
+
+```bash
+go test -v
+```
+
+Run tests with coverage:
+
+```bash
+go test -cover
+```
+
+Generate detailed coverage report:
+
+```bash
+go test -coverprofile=coverage.out
+go tool cover -html=coverage.out
+```
+
+The test suite includes:
+- **HTML cleaning tests**: Validates removal of Wayback Machine artifacts, script removal, and URL rewriting
+- **Proxy handler tests**: Tests HTTP proxy functionality, error handling, and request routing
+- **Edge case tests**: Covers empty inputs, malformed HTML, and various quote styles
+- **Benchmark tests**: Performance testing for the HTML cleaning function
+
+Current test coverage: ~54% (93.6% coverage of the core [`cleanHTML()`](main.go:24) function)
+
 ## Quality
 This is all prompted, and I haven't really read much of the the code. Don't use it for anything important.
